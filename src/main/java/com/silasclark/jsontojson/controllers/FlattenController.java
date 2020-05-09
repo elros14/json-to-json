@@ -34,7 +34,7 @@ public class FlattenController {
 	}
 	
 	
-	@PostMapping("/unFlatten")
+	@PostMapping("/reconstruct")
 	public Object unFlatten(
 		@RequestBody LinkedHashMap<String, Object> flatResource
 	){

@@ -84,7 +84,7 @@ public class JsonFlattenProcessor {
 
         flatResource.forEach((String xPath, Object value) -> {
 
-            ArrayList<String> xPathAsList = new ArrayList<String>(Arrays.asList(xPath.split("\\" + xPathDelimiter)));
+            ArrayList<String> xPathAsList = new ArrayList<>(Arrays.asList(xPath.split("\\" + xPathDelimiter)));
             traverseAndBuildStructuredResource(xPathAsList, unFlattenedResource, value);
 
         });

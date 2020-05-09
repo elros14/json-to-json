@@ -67,8 +67,7 @@ public class JsonToJsonService {
         while (m.find()) {
             allMatches.add(m.group());
         }
-        System.out.println("allMatches - " + allMatches);
-        System.out.println("abstractTargetJsonPath2 - " + abstractTargetJsonPath);
+
         for(String match : allMatches){
             if (!abstractTargetJsonPath.contains("array[*]")){
                 throw new IOException("Configured arrays do not match");
