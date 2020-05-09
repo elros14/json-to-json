@@ -1,20 +1,15 @@
 package com.silasclark.jsontojson.processors;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class JsonFlattenProcessor {
 
     public static final String DEFAULT_DELIMITER = ".";
-    public static final String DEFAULT_ROOT_XPATH = "$";
+    public static final String DEFAULT_ROOT_PATH = "$";
 
     public static LinkedHashMap<String, Object> flatten(Object resource){
 
-        return flatten(resource, new LinkedHashMap<String, Object>(), DEFAULT_ROOT_XPATH, DEFAULT_DELIMITER);
+        return flatten(resource, new LinkedHashMap<String, Object>(), DEFAULT_ROOT_PATH, DEFAULT_DELIMITER);
 
     }
 
@@ -22,8 +17,8 @@ public class JsonFlattenProcessor {
     public static LinkedHashMap<String, Object> flatten(
             Object                        resource,
             LinkedHashMap<String, Object> flatResource,
-            String                        xPath,
-            String                        xPathDelimiter
+            String                        jsonPath,
+            String                        pathDelimiter
     ){
 
 
@@ -35,9 +30,9 @@ public class JsonFlattenProcessor {
             resourceAsMap.forEach((String key, Object value) -> {
 
                 if ((value instanceof List) || (value instanceof Map)){
-                    flatten(value, flatResource, xPath + xPathDelimiter + key, xPathDelimiter);
+                    flatten(value, flatResource, jsonPath + pathDelimiter + key, pathDelimiter);
                 } else {
-                    flatResource.put(xPath + xPathDelimiter + key, value);
+                    flatResource.put(jsonPath + pathDelimiter + key, value);
                 }
 
             });
@@ -52,9 +47,9 @@ public class JsonFlattenProcessor {
             for (Object value : resourceAsList){
 
                 if ((value instanceof List) || (value instanceof Map)){
-                    flatten(value, flatResource, xPath + xPathDelimiter + "array[" + i + "]", xPathDelimiter);
+                    flatten(value, flatResource, jsonPath + "[" + i + "]", pathDelimiter);
                 }else{
-                    flatResource.put(xPath + xPathDelimiter + "array[" + i + "]", value);
+                    flatResource.put(jsonPath + "[" + i + "]", value);
                 }
 
                 i++;
@@ -70,106 +65,85 @@ public class JsonFlattenProcessor {
             LinkedHashMap<String, Object> flatResource
     ){
 
-        return unFlatten(flatResource, DEFAULT_DELIMITER);
-
-    }
-
-
-    public static Object unFlatten(
-            LinkedHashMap<String, Object> flatResource,
-            String                        xPathDelimiter
-    ){
-
         LinkedHashMap<String, Object> unFlattenedResource = new LinkedHashMap<String, Object>();
 
-        flatResource.forEach((String xPath, Object value) -> {
+        flatResource.forEach((String jsonPath, Object value) -> {
 
-            ArrayList<String> xPathAsList = new ArrayList<>(Arrays.asList(xPath.split("\\" + xPathDelimiter)));
-            traverseAndBuildStructuredResource(xPathAsList, unFlattenedResource, value);
+            LinkedList<String> jsonPathAsList = new LinkedList<>(Arrays.asList(jsonPath.split("\\.")));
+            traverseAndBuildStructuredResource(jsonPathAsList, jsonPathAsList, unFlattenedResource, value);
 
         });
 
-        return unFlattenedResource.get(DEFAULT_ROOT_XPATH);
+        return unFlattenedResource.get(DEFAULT_ROOT_PATH);
     }
 
 
 
     private static void traverseAndBuildStructuredResource(
-            ArrayList<String> xPathAsList,
-            Object            resourceAsObj,
-            Object            value
+            List<String>        origJsonPathAsList,
+            List<String>        jsonPathAsList,
+            Map<String, Object> resourceAsMap,
+            Object              value
     ){
 
-        Object localResourceAsObj = resourceAsObj;
+        if (jsonPathAsList.size() == 0) return;
+        if (jsonPathAsList.size() == 1){
+            addValueToCollection(resourceAsMap, jsonPathAsList.get(0), value);
+            return;
+        }
 
-        for (int i = 0; i < xPathAsList.size(); i++){
-
-            String key = xPathAsList.get(i);
-            String nextKey = new String();
-
-            if (i == (xPathAsList.size() - 1)){
-                addValueToCollection(localResourceAsObj, key, value);
-                break;
-            }else{
-                nextKey = xPathAsList.get(i+1);
+        String key = jsonPathAsList.get(0);
+        if (isKeyArray(key)){
+            int index = getIndexFromKeyArray(key);
+            key = getKeyFromKeyArray(key);
+            if (!resourceAsMap.containsKey(key)){
+                resourceAsMap.put(key, new ArrayListAnySize<LinkedHashMap>());
             }
-
-            if (localResourceAsObj instanceof List){
-                @SuppressWarnings("unchecked")
-                ArrayListAnySize<Object> localResourceAsList = (ArrayListAnySize<Object>) localResourceAsObj;
-
-                if (isKeyArray(key)){
-                    int index = getIndexFromKeyArray(key);
-
-                    if ((index < localResourceAsList.size()) && (localResourceAsList.get(index) != null)){
-                        localResourceAsObj = localResourceAsList.get(index);
-                    }else{
-                        if (isKeyArray(nextKey)){
-                            localResourceAsList.add(index, new ArrayListAnySize<Object>());
-                        }else{
-                            localResourceAsList.add(index, new LinkedHashMap<String, Object>());
-                        }
-                        localResourceAsObj = localResourceAsList.get(index);
-                    }
-                }
-            } else if (localResourceAsObj instanceof Map){
-                @SuppressWarnings("unchecked")
-                HashMap<String, Object> localResourceAsMap = (HashMap<String, Object>) localResourceAsObj;
-
-                if (!localResourceAsMap.containsKey(key)){
-                    if (isKeyArray(nextKey)){
-                        localResourceAsMap.put(key, new ArrayListAnySize<Object>());
-                    }else{
-                        localResourceAsMap.put(key, new LinkedHashMap<String, Object>());
-                    }
-                }
-
-                localResourceAsObj = localResourceAsMap.get(key);
+            ArrayListAnySize<LinkedHashMap> resourceAsList = (ArrayListAnySize<LinkedHashMap>) resourceAsMap.get(key);
+            if (resourceAsList.size() <= index){
+                resourceAsList.add(index, new LinkedHashMap<String, Object>());
             }
+            jsonPathAsList.remove(0);
+            traverseAndBuildStructuredResource(origJsonPathAsList, jsonPathAsList, resourceAsList.get(index), value);
+        }else{
+
+            if (!resourceAsMap.containsKey(key)){
+                resourceAsMap.put(key, new LinkedHashMap<>());
+            }
+            jsonPathAsList.remove(0);
+            traverseAndBuildStructuredResource(origJsonPathAsList, jsonPathAsList, (Map)resourceAsMap.get(key), value);
+
         }
 
     }
 
 
-    private static void addValueToCollection(Object collection, String key, Object value){
+    private static void addValueToCollection(
+            Map<String, Object> resourceAsMap,
+            String key,
+            Object value
+    ){
 
-        if (collection instanceof List){
-            @SuppressWarnings("unchecked")
-            ArrayListAnySize<Object> collectionAsList = (ArrayListAnySize<Object>) collection;
-            collectionAsList.add(getIndexFromKeyArray(key), value);
-        }else if (collection instanceof Map){
-            @SuppressWarnings("unchecked")
-            HashMap<String, Object> collectionAsMap = (HashMap<String, Object>) collection;
-            collectionAsMap.put(key, value);
+        if (isKeyArray(key)) {
+
+            int index = getIndexFromKeyArray(key);
+            key = getKeyFromKeyArray(key);
+
+            if (!resourceAsMap.containsKey(key)) {
+                resourceAsMap.put(key, new ArrayListAnySize<>());
+            }
+            ArrayListAnySize<Object> list = (ArrayListAnySize) resourceAsMap.get(key);
+            list.add(index, value);
+
+        } else{
+            resourceAsMap.put(key, value);
         }
     }
 
 
     private static boolean isKeyArray(String key){
 
-        if (key.length() < 6) return false;
-
-        if ((key.substring(0, 6).equals("array[")) && (key.substring((key.length() - 1), key.length()).equals("]"))){
+        if (key.contains("[") && key.contains("]")){
             return true;
         }else{
             return false;
@@ -178,16 +152,20 @@ public class JsonFlattenProcessor {
     }
 
 
+    private static String getKeyFromKeyArray(String key){
+        return key.substring(0, key.indexOf("["));
+    }
+
+
     private static int getIndexFromKeyArray(String key){
 
-        String indexStr = key.substring(key.indexOf("array[")+6, key.indexOf("]"));
+        String indexStr = key.substring(key.indexOf("[")+1, key.indexOf("]"));
         return Integer.parseInt(indexStr);
 
     }
 
 
     public static class ArrayListAnySize<E> extends ArrayList<E>{
-
 
         private static final long serialVersionUID = -5136114147878757495L;
 
